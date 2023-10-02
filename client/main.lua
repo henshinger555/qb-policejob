@@ -20,10 +20,11 @@ local function CreateDutyBlips(playerId, playerLabel, playerJob, playerLocation)
         ShowHeadingIndicatorOnBlip(blip, true)
         SetBlipRotation(blip, math.ceil(playerLocation.w))
         SetBlipScale(blip, 1.0)
-        if playerJob == "police" then
-            SetBlipColour(blip, 38)
+
+        if HasPoliceJob(playerJob) then
+            SetBlipColour(blip, Config.PoliceJobs[playerJob].blipColor)
         else
-            SetBlipColour(blip, 5)
+            SetBlipColour(blip, Config.SupportJobs[playerJob].blipColor)
         end
         SetBlipAsShortRange(blip, true)
         BeginTextCommandSetBlipName('STRING')
@@ -39,6 +40,13 @@ local function CreateDutyBlips(playerId, playerLabel, playerJob, playerLocation)
 end
 
 -- Events
+AddEventHandler('onResourceStop', function(resourceName)
+
+    for k, v in pairs(Config.Locations["duty"]) do
+        exports['qb-target']:RemoveZone("PoliceDuty_"..k)
+    end
+end)
+
 AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
     local player = QBCore.Functions.GetPlayerData()
     PlayerJob = player.job
@@ -69,7 +77,10 @@ AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
         TriggerEvent('qb-clothing:client:loadOutfit', trackerClothingData)
     end
 
-    if PlayerJob and PlayerJob.name ~= "police" then
+    print(PlayerJob.name)
+    print(NotPolice(PlayerJob.name))
+    if PlayerJob and NotPolice(PlayerJob.name) then
+        print("Not a cop coming in")
         if DutyBlips then
             for _, v in pairs(DutyBlips) do
                 RemoveBlip(v)
@@ -77,6 +88,7 @@ AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
         end
         DutyBlips = {}
     end
+
 end)
 
 RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
@@ -101,7 +113,7 @@ RegisterNetEvent("QBCore:Client:SetDuty", function(newDuty)
 end)
 
 RegisterNetEvent('QBCore:Client:OnJobUpdate', function(JobInfo)
-    if JobInfo.name ~= "police" then
+    if NotPolice(JobInfo.name) then
         if DutyBlips then
             for _, v in pairs(DutyBlips) do
                 RemoveBlip(v)
@@ -130,7 +142,7 @@ RegisterNetEvent('police:client:sendBillingMail', function(amount)
 end)
 
 RegisterNetEvent('police:client:UpdateBlips', function(players)
-    if PlayerJob and (PlayerJob.name == 'police' or PlayerJob.name == 'ambulance') and
+    if PlayerJob and (HasPoliceJob(PlayerJob.name) or HasSupportJob(PlayerJob.name)) and
         PlayerJob.onduty then
         if DutyBlips then
             for _, v in pairs(DutyBlips) do

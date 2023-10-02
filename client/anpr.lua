@@ -5,7 +5,7 @@ function HandlespeedCam(speedCam, hasBeenBusted)
 	local myPed = PlayerPedId()
 	local playerPos = GetEntityCoords(myPed)
 	local isInMarker  = false
-	if #(playerPos - vector3(speedCam.x, speedCam.y, speedCam.z)) < 20.0 then
+	if #(playerPos - vector3(speedCam.x, speedCam.y, speedCam.z)) < 50.0 then
 		isInMarker  = true
 	end
 
@@ -16,9 +16,14 @@ function HandlespeedCam(speedCam, hasBeenBusted)
 		local vehicle = GetPlayersLastVehicle() -- gets the current vehicle the player is in.
 		if IsPedInAnyVehicle(myPed, false) then
 			if GetPedInVehicleSeat(vehicle, -1) == myPed then
+				print(GetVehicleClass(vehicle))
 				if GetVehicleClass(vehicle) ~= 18 then
                     local plate = QBCore.Functions.GetPlate(vehicle)
+
+					print(plate)
 					QBCore.Functions.TriggerCallback('police:IsPlateFlagged', function(result)
+						print(result)
+						
 						if result then
 							local coords = GetEntityCoords(PlayerPedId())
 							local blipsettings = {
@@ -33,7 +38,16 @@ function HandlespeedCam(speedCam, hasBeenBusted)
 							local s1, s2 = GetStreetNameAtCoord(coords.x, coords.y, coords.z)
 							local street1 = GetStreetNameFromHashKey(s1)
 							local street2 = GetStreetNameFromHashKey(s2)
-							TriggerServerEvent("police:server:FlaggedPlateTriggered", hasBeenBusted, plate, street1, street2, blipsettings)
+
+							print(hasBeenBusted)
+							print(plate)
+							print(street1)
+							print(street2)
+							print(blipsettings)
+
+                            TriggerEvent("tgiann-policeAlert:alert", "ANPR: Plate Found", plate, street1, true)
+
+							--TriggerServerEvent("police:server:FlaggedPlateTriggered", hasBeenBusted, plate, street1, street2, blipsettings)
 						end
                     end, plate)
 				end
@@ -47,16 +61,18 @@ function HandlespeedCam(speedCam, hasBeenBusted)
 	end
 end
 
-CreateThread(function()
-	while true do
-		Wait(1)
-		if IsPedInAnyVehicle(PlayerPedId(), false) then
-			for key, value in pairs(Config.Radars) do
-				HandlespeedCam(value, key)
-			end
-			Wait(200)
-		else
-			Wait(2500)
-		end
-	end
-end)
+if Config.ANPR_Enable then 
+    CreateThread(function()
+	    while true do
+		    Wait(1)
+		    if IsPedInAnyVehicle(PlayerPedId(), false) then
+			    for key, value in pairs(Config.ANPR_Radars) do
+				    HandlespeedCam(value, key)
+			    end
+			    Wait(200)
+		    else
+			    Wait(2500)
+		    end
+	    end
+    end)
+end

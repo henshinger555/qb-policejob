@@ -8,17 +8,37 @@ Config.Objects = {
     ["light"] = {model = `prop_worklight_03b`, freeze = true},
 }
 
+Config.DebugZone = true
+
 Config.MaxSpikes = 5
 
 Config.HandCuffItem = 'handcuffs'
 
 Config.LicenseRank = 2
 
+Config.PoliceJobs = {
+    ["police"] = {
+        blipColor = 38
+    },
+    ["sheriff"] = {
+        blipColor = 25
+    }
+}
+
+Config.SupportJobs = {
+    ["ambulance"] = {
+        blipColor = 5
+    },
+    ["doj"] = {
+        blipColor = 3
+    }
+}
+
 Config.UseTarget = GetConvar('UseTarget', 'false') == 'true'
 Config.Locations = {
     ["duty"] = {
-        [1] = vector3(440.085, -974.924, 30.689),
-        [2] = vector3(-449.811, 6012.909, 31.815),
+        [1] =  vector3(441.22, -981.94, 30.69),
+        [2] =  vector3(-449.811, 6012.909, 31.815),
     },
     ["vehicle"] = {
         [1] = vector4(448.159, -1017.41, 28.562, 90.654),
@@ -29,12 +49,13 @@ Config.Locations = {
         [1] = vector3(453.075, -980.124, 30.889),
     },
     ["impound"] = {
-        [1] = vector3(436.68, -1007.42, 27.32),
-        [2] = vector3(-436.14, 5982.63, 31.34),
+        [1] = {coords = vector3(414.42, -1024.64, 29.5), exit = vector3(424.52, -1023.8, 29.09)},
+        --[2] = vector3(-436.14, 5982.63, 31.34),
     },
     ["helicopter"] = {
         [1] = vector4(449.168, -981.325, 43.691, 87.234),
         [2] = vector4(-475.43, 5988.353, 31.716, 31.34),
+        [3] = vector3(1769.76, 3238.93, 42.14)
     },
     ["armory"] = {
         [1] = vector3(462.23, -981.12, 30.68),
@@ -431,3 +452,5 @@ Config.VehicleSettings = {
 		["livery"] = 1,
     }
 }
+
+Config.UseEvidenceSystem = false

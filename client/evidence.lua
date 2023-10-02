@@ -191,7 +191,7 @@ RegisterNetEvent('evidence:client:ClearCasingsInArea', function()
 end)
 
 -- Threads
-
+if Config.UseEvidenceSystem then 
 CreateThread(function()
     while true do
         Wait(10000)
@@ -311,11 +311,12 @@ CreateThread(function()
     end
 end)
 
-CreateThread(function()
+
+  CreateThread(function()
     while true do
         Wait(10)
         if LocalPlayer.state.isLoggedIn then
-            if PlayerJob.name == 'police' and PlayerJob.onduty then
+            if HasPoliceJob(PlayerJob.name) and PlayerJob.onduty then
                 if IsPlayerFreeAiming(PlayerId()) and GetSelectedPedWeapon(PlayerPedId()) == `WEAPON_FLASHLIGHT` then
                     if next(Casings) then
                         local pos = GetEntityCoords(PlayerPedId(), true)
@@ -352,4 +353,5 @@ CreateThread(function()
             end
         end
     end
-end)
+  end)
+end
