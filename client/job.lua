@@ -45,80 +45,15 @@ local function openFingerprintUI()
     SetNuiFocus(true, true)
 end
 
-local function SetCarItemsInfo()
-	local items = {}
-	for _, item in pairs(Config.CarItems) do
-		local itemInfo = QBCore.Shared.Items[item.name:lower()]
-		items[item.slot] = {
-			name = itemInfo["name"],
-			amount = tonumber(item.amount),
-			info = item.info,
-			label = itemInfo["label"],
-			description = itemInfo["description"] and itemInfo["description"] or "",
-			weight = itemInfo["weight"],
-			type = itemInfo["type"],
-			unique = itemInfo["unique"],
-			useable = itemInfo["useable"],
-			image = itemInfo["image"],
-			slot = item.slot,
-		}
-	end
-	Config.CarItems = items
-end
-
-local function doCarDamage(currentVehicle, veh)
-	local smash = false
-	local damageOutside = false
-	local damageOutside2 = false
-	local engine = veh.engine + 0.0
-	local body = veh.body + 0.0
-
-	if engine < 200.0 then engine = 200.0 end
-    if engine  > 1000.0 then engine = 950.0 end
-	if body < 150.0 then body = 150.0 end
-	if body < 950.0 then smash = true end
-	if body < 920.0 then damageOutside = true end
-	if body < 920.0 then damageOutside2 = true end
-
-    Wait(100)
-    SetVehicleEngineHealth(currentVehicle, engine)
-
-	if smash then
-		SmashVehicleWindow(currentVehicle, 0)
-		SmashVehicleWindow(currentVehicle, 1)
-		SmashVehicleWindow(currentVehicle, 2)
-		SmashVehicleWindow(currentVehicle, 3)
-		SmashVehicleWindow(currentVehicle, 4)
-	end
-
-	if damageOutside then
-		SetVehicleDoorBroken(currentVehicle, 1, true)
-		SetVehicleDoorBroken(currentVehicle, 6, true)
-		SetVehicleDoorBroken(currentVehicle, 4, true)
-	end
-
-	if damageOutside2 then
-		SetVehicleTyreBurst(currentVehicle, 1, false, 990.0)
-		SetVehicleTyreBurst(currentVehicle, 2, false, 990.0)
-		SetVehicleTyreBurst(currentVehicle, 3, false, 990.0)
-		SetVehicleTyreBurst(currentVehicle, 4, false, 990.0)
-	end
-
-	if body < 1000 then
-		SetVehicleBodyHealth(currentVehicle, 985.1)
-	end
-end
-
 function TakeOutImpound(vehicle)
     print("take out of impound")
 
-    local coords
+    local garage = Config.Locations["impound"][currentGarage]
 
-    if Config.UseTarget then 
-        coords = Config.Locations["impound"][currentGarage].exit
-    else
-        coords = Config.Locations["impound"][currentGarage].coords
-    end
+    print(json.encode(garage, {indent=true}))
+   
+    local coords = Config.Locations["impound"][currentGarage].exit
+    
 
     print(coords)
     if coords then
@@ -127,7 +62,7 @@ function TakeOutImpound(vehicle)
             QBCore.Functions.TriggerCallback('qb-garage:server:GetVehicleProperties', function(properties)
                 QBCore.Functions.SetVehicleProperties(veh, properties)
                 SetVehicleNumberPlateText(veh, vehicle.plate)
-		SetVehicleDirtLevel(veh, 0.0)
+		        SetVehicleDirtLevel(veh, 0.0)
                 SetEntityHeading(veh, coords.w)
                 exports['LegacyFuel']:SetFuel(veh, vehicle.fuel)
                 doCarDamage(veh, vehicle)
@@ -141,33 +76,7 @@ function TakeOutImpound(vehicle)
     end
 end
 
-function TakeOutVehicle(vehicleInfo)
-    local coords = Config.Locations["vehicle"][currentGarage]
-    if coords then
-        QBCore.Functions.TriggerCallback('QBCore:Server:SpawnVehicle', function(netId)
-            local veh = NetToVeh(netId)
-            SetCarItemsInfo()
-            SetVehicleNumberPlateText(veh, Lang:t('info.police_plate')..tostring(math.random(1000, 9999)))
-            SetEntityHeading(veh, coords.w)
-            exports['LegacyFuel']:SetFuel(veh, 100.0)
-            closeMenuFull()
-            if Config.VehicleSettings[vehicleInfo] ~= nil then
-                if Config.VehicleSettings[vehicleInfo].extras ~= nil then
-			QBCore.Shared.SetDefaultVehicleExtras(veh, Config.VehicleSettings[vehicleInfo].extras)
-		end
-		if Config.VehicleSettings[vehicleInfo].livery ~= nil then
-			SetVehicleLivery(veh, Config.VehicleSettings[vehicleInfo].livery)
-		end
-            end
-            TaskWarpPedIntoVehicle(PlayerPedId(), veh, -1)
-            TriggerEvent("vehiclekeys:client:SetOwner", QBCore.Functions.GetPlate(veh))
-            TriggerServerEvent("inventory:server:addTrunkItems", QBCore.Functions.GetPlate(veh), Config.CarItems)
-            SetVehicleEngineOn(veh, true, true)
-        end, vehicleInfo, coords, true)
-    end
-end
-
-local function IsArmoryWhitelist() -- being removed
+function IsArmoryWhitelist() -- being removed
     local retval = false
 
     if HasPoliceJob(QBCore.Functions.GetPlayerData().job.name) then
@@ -184,61 +93,7 @@ local function SetWeaponSeries()
     end
 end
 
-function MenuGarage(currentSelection)
-    local vehicleMenu = {
-        {
-            header = Lang:t('menu.garage_title'),
-            isMenuHeader = true
-        }
-    }
 
-    print(QBCore.Functions.GetPlayerData().job.grade.level)
-
-    local authorizedVehicles = Config.AuthorizedVehicles[QBCore.Functions.GetPlayerData().job.grade.level]
-
-    if authorizedVehicles == nil then 
-    else
-      for veh, label in pairs(authorizedVehicles) do
-          vehicleMenu[#vehicleMenu+1] = {
-              header = label,
-              txt = "",
-              params = {
-                  event = "police:client:TakeOutVehicle",
-                  args = {
-                      vehicle = veh,
-                      currentSelection = currentSelection
-                  }
-              }
-          }
-        end
-    end
-
-    if IsArmoryWhitelist() then
-        for veh, label in pairs(Config.WhitelistedVehicles) do
-            vehicleMenu[#vehicleMenu+1] = {
-                header = label,
-                txt = "",
-                params = {
-                    event = "police:client:TakeOutVehicle",
-                    args = {
-                        vehicle = veh,
-                        currentSelection = currentSelection
-                    }
-                }
-            }
-        end
-    end
-
-    vehicleMenu[#vehicleMenu+1] = {
-        header = Lang:t('menu.close'),
-        txt = "",
-        params = {
-            event = "qb-menu:client:closeMenu"
-        }
-
-    }
-    exports['qb-menu']:openMenu(vehicleMenu)
-end
 
 function MenuImpound(currentSelection)
     local impoundMenu = {
@@ -411,15 +266,19 @@ RegisterNetEvent('police:client:CheckStatus', function()
     end)
 end)
 
-RegisterNetEvent("police:client:VehicleMenuHeader", function (data)
-    MenuGarage(data.currentSelection)
-    currentGarage = data.currentSelection
-end)
+
 
 
 RegisterNetEvent("police:client:ImpoundMenuHeader", function (data)
-    MenuImpound(data.currentSelection)
-    currentGarage = data.currentSelection
+
+    local currentSelection = data.currentSelection
+
+    if data.currentSelection == nil then
+        currentSelection = data.args.currentSelection
+    end
+
+    MenuImpound(currentSelection)
+    currentGarage = currentSelection
 end)
 
 RegisterNetEvent('police:client:TakeOutImpound', function(data)
@@ -429,21 +288,22 @@ RegisterNetEvent('police:client:TakeOutImpound', function(data)
     end
 end)
 
-RegisterNetEvent('police:client:TakeOutVehicle', function(data)
-    if inGarage then
-        local vehicle = data.vehicle
-        TakeOutVehicle(vehicle)
-    end
-end)
+
 
 RegisterNetEvent('police:client:EvidenceStashDrawer', function(data)
+
     local currentEvidence = data.currentEvidence
+
+    if data.currentEvidence == nil then
+        currentEvidence = data.args.currentEvidence
+    end
+
     local pos = GetEntityCoords(PlayerPedId())
-    local takeLoc = Config.Locations["evidence"][currentEvidence]
+    local takeLoc = Config.Locations["evidence"][currentEvidence].coords
 
     if not takeLoc then return end
 
-    if #(pos - takeLoc) <= 1.0 then
+    if #(pos - takeLoc) <= 2.0 then
         local drawer = exports['qb-input']:ShowInput({
             header = Lang:t('info.evidence_stash', {value = currentEvidence}),
             submitText = "open",
@@ -503,27 +363,6 @@ RegisterNetEvent('qb-police:client:openArmoury', function()
     end
     SetWeaponSeries()
     TriggerServerEvent("inventory:server:OpenInventory", "shop", "police", authorizedItems)
-end)
-
-RegisterNetEvent('qb-police:client:spawnHelicopter', function(k)
-    if IsPedInAnyVehicle(PlayerPedId(), false) then
-        QBCore.Functions.DeleteVehicle(GetVehiclePedIsIn(PlayerPedId()))
-    else
-        local coords = Config.Locations["helicopter"][k]
-        if not coords then coords = GetEntityCoords(PlayerPedId()) end
-        QBCore.Functions.TriggerCallback('QBCore:Server:SpawnVehicle', function(netId)
-            local veh = NetToVeh(netId)
-            SetVehicleLivery(veh , 0)
-            SetVehicleMod(veh, 0, 48)
-            SetVehicleNumberPlateText(veh, "ZULU"..tostring(math.random(1000, 9999)))
-            SetEntityHeading(veh, coords.w)
-            exports['LegacyFuel']:SetFuel(veh, 100.0)
-            closeMenuFull()
-            TaskWarpPedIntoVehicle(PlayerPedId(), veh, -1)
-            TriggerEvent("vehiclekeys:client:SetOwner", QBCore.Functions.GetPlate(veh))
-            SetVehicleEngineOn(veh, true, true)
-        end, Config.PoliceHelicopter, coords, true)
-    end
 end)
 
 RegisterNetEvent("qb-police:client:openStash", function()
@@ -647,24 +486,6 @@ local function armoury()
     end)
 end
 
--- Helicopter Thread
-local function heli()
-    CreateThread(function()
-        while true do
-            Wait(0)
-            if inHelicopter and HasPoliceJob(PlayerJob.name) then
-                if PlayerJob.onduty then sleep = 5 end
-                if IsControlJustReleased(0, 38) then
-                    TriggerEvent("qb-police:client:spawnHelicopter")
-                    break
-                end
-            else
-                break
-            end
-        end
-    end)
-end
-
 -- Police Impound Thread
 local function impound()
     CreateThread(function()
@@ -685,25 +506,6 @@ local function impound()
     end)
 end
 
--- Police Garage Thread
-local function garage()
-    CreateThread(function()
-        while true do
-            Wait(0)
-            if inGarage and HasPoliceJob(PlayerJob.name) then
-                if PlayerJob.onduty then sleep = 5 end
-                if IsPedInAnyVehicle(PlayerPedId(), false) then
-                    if IsControlJustReleased(0, 38) then
-                        QBCore.Functions.DeleteVehicle(GetVehiclePedIsIn(PlayerPedId()))
-                        break
-                    end
-                end
-            else
-                break
-            end
-        end
-    end)
-end
 
 if Config.UseTarget then
 
@@ -711,13 +513,13 @@ if Config.UseTarget then
     
     CreateThread(function()
         -- Toggle Duty
-        for k, v in pairs(Config.Locations["duty"]) do
-            exports['qb-target']:AddBoxZone("PoliceDuty_"..k, vector3(v.x, v.y, v.z), 1, 1, {
+        for k, duty in pairs(Config.Locations["duty"]) do
+            exports['qb-target']:AddBoxZone("PoliceDuty_"..k, duty.coords, duty.zoneLength, duty.zoneWidth, {
                 name = "PoliceDuty_"..k,
-                heading = 11,
+                heading = duty.heading,
                 debugPoly = Config.DebugZone,
-                minZ = v.z - 1,
-                maxZ = v.z + 1,
+                minZ = duty.coords.z - duty.zoneMinZ,
+                maxZ = duty.coords.z + duty.zoneMinZ,
             }, {
                 options = {
                     {
@@ -733,13 +535,13 @@ if Config.UseTarget then
         end
 
         -- Personal Stash
-        for k, v in pairs(Config.Locations["stash"]) do
-            exports['qb-target']:AddBoxZone("PoliceStash_"..k, vector3(v.x, v.y, v.z), 1.5, 1.5, {
+        for k, stash in pairs(Config.Locations["stash"]) do
+            exports['qb-target']:AddBoxZone("PoliceStash_"..k, stash.coords, stash.zoneLength, stash.zoneWidth, {
                 name = "PoliceStash_"..k,
-                heading = 11,
+                heading = stash.heading,
                 debugPoly = Config.DebugZone,
-                minZ = v.z - 1,
-                maxZ = v.z + 1,
+                minZ = stash.coords.z - stash.zoneMinZ,
+                maxZ = stash.coords.z + stash.zoneMinZ,
             }, {
                 options = {
                     {
@@ -755,13 +557,13 @@ if Config.UseTarget then
         end
 
         -- Police Trash
-        for k, v in pairs(Config.Locations["trash"]) do
-            exports['qb-target']:AddBoxZone("PoliceTrash_"..k, vector3(v.x, v.y, v.z), 1, 1.75, {
+        for k, trash in pairs(Config.Locations["trash"]) do
+            exports['qb-target']:AddBoxZone("PoliceTrash_"..k, trash.coords, trash.zoneLength, trash.zoneWidth, {
                 name = "PoliceTrash_"..k,
-                heading = 11,
+                heading = trash.heading,
                 debugPoly = Config.DebugZone,
-                minZ = v.z - 1,
-                maxZ = v.z + 1,
+                minZ = trash.coords.z - trash.zoneMinZ,
+                maxZ = trash.coords.z + trash.zoneMinZ,
             }, {
                 options = {
                     {
@@ -777,13 +579,13 @@ if Config.UseTarget then
         end
 
         -- Fingerprint
-        for k, v in pairs(Config.Locations["fingerprint"]) do
-            exports['qb-target']:AddBoxZone("PoliceFingerprint_"..k, vector3(v.x, v.y, v.z), 2, 1, {
+        for k, fingerprint in pairs(Config.Locations["fingerprint"]) do
+            exports['qb-target']:AddBoxZone("PoliceFingerprint_"..k, fingerprint.coords, fingerprint.zoneLength, fingerprint.zoneWidth, {
                 name = "PoliceFingerprint_"..k,
-                heading = 11,
+                heading = fingerprint.heading,
                 debugPoly = Config.DebugZone,
-                minZ = v.z - 1,
-                maxZ = v.z + 1,
+                minZ = fingerprint.coords.z - fingerprint.zoneMinZ,
+                maxZ = fingerprint.coords.z + fingerprint.zoneMinZ,
             }, {
                 options = {
                     {
@@ -799,13 +601,13 @@ if Config.UseTarget then
         end
 
         -- Armoury
-        for k, v in pairs(Config.Locations["armory"]) do
-            exports['qb-target']:AddBoxZone("PoliceArmory_"..k, vector3(v.x, v.y, v.z), 5, 1, {
+        for k, armoury in pairs(Config.Locations["armory"]) do
+            exports['qb-target']:AddBoxZone("PoliceArmory_"..k, armoury.coords, armoury.zoneLength, armoury.zoneWidth, {
                 name = "PoliceArmory_"..k,
-                heading = 11,
+                heading = armoury.heading,
                 debugPoly = Config.DebugZone,
-                minZ = v.z - 1,
-                maxZ = v.z + 1,
+                minZ = armoury.coords.z - armoury.zoneMinZ,
+                maxZ = armoury.coords.z + armoury.zoneMinZ,
             }, {
                 options = {
                     {
@@ -821,14 +623,14 @@ if Config.UseTarget then
         end
 
         -- PD Impound
-        for k, v in pairs(Config.Locations["impound"]) do
+        for k, impound in pairs(Config.Locations["impound"]) do
             currentSelection = k
-            exports['qb-target']:AddBoxZone("PoliceImpound_"..k, vector3(v.coords.x, v.coords.y, v.coords.z), 5, 1, {
+            exports['qb-target']:AddBoxZone("PoliceImpound_"..k, impound.coords, impound.zoneLength, impound.zoneWidth, {
                 name = "PoliceImpound_"..k,
-                heading = 11,
+                heading = impound.heading,
                 debugPoly = Config.DebugZone,
-                minZ = v.coords.z - 1,
-                maxZ = v.coords.z + 1,
+                minZ = impound.coords.z - impound.zoneMinZ,
+                maxZ = impound.coords.z + impound.zoneMinZ,
             }, {
                 options = {
                     {
@@ -846,21 +648,45 @@ if Config.UseTarget then
             })
         end
 
+        -- PD Evidence
+        for k, evidence in pairs(Config.Locations["evidence"]) do
+            currentSelection = k
+            exports['qb-target']:AddBoxZone("PoliceEvidence_"..k, evidence.coords, evidence.zoneLength, evidence.zoneWidth, {
+                name = "PoliceEvidence_"..k,
+                heading = evidence.heading,
+                debugPoly = Config.DebugZone,
+                minZ = evidence.coords.z - evidence.zoneMinZ,
+                maxZ = evidence.coords.z + evidence.zoneMinZ,
+            }, {
+                options = {
+                    {
+                        type = "client",
+                        event = "police:client:EvidenceStashDrawer",
+                        icon = "fas fa-swords",
+                        label = "Open Evidence",
+                        job = targetJobs,
+                        args = {
+                            currentEvidence = currentSelection,
+                        }
+                    },
+                },
+                distance = 2
+            })
+        end
+
     end)
-
-
 
 else
 
     -- Toggle Duty
     local dutyZones = {}
-    for _, v in pairs(Config.Locations["duty"]) do
+    for _, duty in pairs(Config.Locations["duty"]) do
         dutyZones[#dutyZones+1] = BoxZone:Create(
-            vector3(vector3(v.x, v.y, v.z)), 1.75, 1, {
+            duty.coords, duty.zoneLength, duty.zoneWidth, {
             name="box_zone",
             debugPoly = Config.DebugZone,
-            minZ = v.z - 1,
-            maxZ = v.z + 1,
+            minZ = duty.coords.z - duty.zoneMinZ,
+            maxZ = duty.coords.z + duty.zoneMinZ,
         })
     end
 
@@ -883,13 +709,13 @@ else
 
     -- Personal Stash
     local stashZones = {}
-    for _, v in pairs(Config.Locations["stash"]) do
+    for _, stash in pairs(Config.Locations["stash"]) do
         stashZones[#stashZones+1] = BoxZone:Create(
-            vector3(vector3(v.x, v.y, v.z)), 1.5, 1.5, {
+            stash.coords, stash.zoneLength, stash.zoneWidth, {
             name="box_zone",
             debugPoly = Config.DebugZone,
-            minZ = v.z - 1,
-            maxZ = v.z + 1,
+            minZ = stash.coords.z - stash.zoneMinZ,
+            maxZ = stash.coords.z + stash.zoneMinZ
         })
     end
 
@@ -909,9 +735,9 @@ else
 
     -- Police Trash
     local trashZones = {}
-    for _, v in pairs(Config.Locations["trash"]) do
+    for _, trash in pairs(Config.Locations["trash"]) do
         trashZones[#trashZones+1] = BoxZone:Create(
-            vector3(vector3(v.x, v.y, v.z)), 1, 1.75, {
+            trash.coords, trash.zoneLength, trash.zoneWidth, {
             name="box_zone",
             debugPoly = Config.DebugZone,
             minZ = v.z - 1,
@@ -935,13 +761,13 @@ else
 
     -- Fingerprints
     local fingerprintZones = {}
-    for _, v in pairs(Config.Locations["fingerprint"]) do
+    for _, fingerprint in pairs(Config.Locations["fingerprint"]) do
         fingerprintZones[#fingerprintZones+1] = BoxZone:Create(
-            vector3(vector3(v.x, v.y, v.z)), 2, 1, {
+            fingerprint.coords, fingerprint.zoneLength, fingerprint.zoneWidth, {
             name="box_zone",
             debugPoly = Config.DebugZone,
-            minZ = v.z - 1,
-            maxZ = v.z + 1,
+            minZ = fingerprint.coords - fingerprint.zoneMinZ,
+            maxZ = fingerprint.coords + fingerprint.zoneMinZ,
         })
     end
 
@@ -987,14 +813,14 @@ else
 
     -- Police Impound
     local impoundZones = {}
-    for _, v in pairs(Config.Locations["impound"]) do
+    for _, impound in pairs(Config.Locations["impound"]) do
         impoundZones[#impoundZones+1] = BoxZone:Create(
-            vector3(v.coords.x, v.coords.y, v.coords.z), 1, 1, {
+            impound.coords, impound.zoneLength, impound.zoneWidth, {
             name="box_zone",
             debugPoly = false,
-            minZ = v.coords.z - 1,
-            maxZ = v.coords.z + 1,
-            heading = 180,
+            minZ = impound.coords.z - impound.zoneMinZ,
+            maxZ = impound.coords.z + impound.zoneMinZ,
+            heading =c.heading,
         })
     end
 
@@ -1034,127 +860,45 @@ else
         end
     end)
 
-end
-
-CreateThread(function()
-    -- Evidence Storage
-    local evidenceZones = {}
-    for _, v in pairs(Config.Locations["evidence"]) do
-        evidenceZones[#evidenceZones+1] = BoxZone:Create(
-            vector3(vector3(v.x, v.y, v.z)), 2, 1, {
-            name="box_zone",
-            debugPoly = Config.DebugZone,
-            minZ = v.z - 1,
-            maxZ = v.z + 1,
-        })
-    end
-
-    local evidenceCombo = ComboZone:Create(evidenceZones, {name = "evidenceCombo", debugPoly = false})
-    evidenceCombo:onPlayerInOut(function(isPointInside)
-        if isPointInside then
-            if HasPoliceJob(PlayerJob.name) and PlayerJob.onduty then
-                local currentEvidence = 0
-                local pos = GetEntityCoords(PlayerPedId())
-
-                for k, v in pairs(Config.Locations["evidence"]) do
-                    if #(pos - v) < 2 then
-                        currentEvidence = k
-                    end
-                end
-                exports['qb-menu']:showHeader({
-                    {
-                        header = Lang:t('info.evidence_stash', {value = currentEvidence}),
-                        params = {
-                            event = 'police:client:EvidenceStashDrawer',
-                            args = {
-                                currentEvidence = currentEvidence
-                            }
-                        }
-                    }
-                })
-            end
-        else
-            exports['qb-menu']:closeMenu()
+        -- Evidence Storage
+        local evidenceZones = {}
+        for _, evidence in pairs(Config.Locations["evidence"]) do
+            evidenceZones[#evidenceZones+1] = BoxZone:Create(
+                evidence.coords, evidence.zoneLength, evidence.zoneWidth, {
+                name="box_zone",
+                debugPoly = Config.DebugZone,
+                minZ = evidence.coords.z - evidence.zoneMinZ,
+                maxZ = evidence.coords.z + evidence.zoneMinZ,
+            })
         end
-    end)
-
-    -- Helicopter
-    local helicopterZones = {}
-    for _, v in pairs(Config.Locations["helicopter"]) do
-        helicopterZones[#helicopterZones+1] = BoxZone:Create(
-            vector3(vector3(v.x, v.y, v.z)), 10, 10, {
-            name="box_zone",
-            debugPoly = Config.DebugZone,
-            minZ = v.z - 1,
-            maxZ = v.z + 1,
-        })
-    end
-
-    local helicopterCombo = ComboZone:Create(helicopterZones, {name = "helicopterCombo", debugPoly = false})
-    helicopterCombo:onPlayerInOut(function(isPointInside)
-        if isPointInside then
-            inHelicopter = true
-            if HasPoliceJob(PlayerJob.name) and PlayerJob.onduty then
-                if IsPedInAnyVehicle(PlayerPedId(), false) then
-                    exports['qb-core']:HideText()
-                    exports['qb-core']:DrawText(Lang:t('info.store_heli'), 'left')
-                    heli()
-                else
-                    exports['qb-core']:DrawText(Lang:t('info.take_heli'), 'left')
-                    heli()
-                end
-            end
-        else
-            inHelicopter = false
-            exports['qb-core']:HideText()
-        end
-    end)
-
-    -- Police Garage
-    local garageZones = {}
-    for _, v in pairs(Config.Locations["vehicle"]) do
-        garageZones[#garageZones+1] = BoxZone:Create(
-            vector3(v.x, v.y, v.z), 3, 3, {
-            name="box_zone",
-            debugPoly = Config.DebugZone,
-            minZ = v.z - 1,
-            maxZ = v.z + 1,
-        })
-    end
-
-    local garageCombo = ComboZone:Create(garageZones, {name = "garageCombo", debugPoly = false})
-    garageCombo:onPlayerInOut(function(isPointInside, point)
-        if isPointInside then
-            inGarage = true
-            if HasPoliceJob(PlayerJob.name) and PlayerJob.onduty then
-                if IsPedInAnyVehicle(PlayerPedId(), false) then
-                    exports['qb-core']:DrawText(Lang:t('info.store_veh'), 'left')
-		    garage()
-                else
-                    local currentSelection = 0
-
-                    for k, v in pairs(Config.Locations["vehicle"]) do
-                        if #(point - vector3(v.x, v.y, v.z)) < 4 then
-                            currentSelection = k
+    
+        local evidenceCombo = ComboZone:Create(evidenceZones, {name = "evidenceCombo", debugPoly = false})
+        evidenceCombo:onPlayerInOut(function(isPointInside)
+            if isPointInside then
+                if HasPoliceJob(PlayerJob.name) and PlayerJob.onduty then
+                    local currentEvidence = 0
+                    local pos = GetEntityCoords(PlayerPedId())
+    
+                    for k, v in pairs(Config.Locations["evidence"]) do
+                        if #(pos - v) < 2 then
+                            currentEvidence = k
                         end
                     end
                     exports['qb-menu']:showHeader({
                         {
-                            header = Lang:t('menu.pol_garage'),
+                            header = Lang:t('info.evidence_stash', {value = currentEvidence}),
                             params = {
-                                event = 'police:client:VehicleMenuHeader',
+                                event = 'police:client:EvidenceStashDrawer',
                                 args = {
-                                    currentSelection = currentSelection,
+                                    currentEvidence = currentEvidence
                                 }
                             }
                         }
                     })
                 end
+            else
+                exports['qb-menu']:closeMenu()
             end
-        else
-            inGarage = false
-            exports['qb-menu']:closeMenu()
-            exports['qb-core']:HideText()
-        end
-    end)
-end)
+        end)
+
+end

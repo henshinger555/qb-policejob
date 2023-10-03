@@ -45,6 +45,31 @@ AddEventHandler('onResourceStop', function(resourceName)
     for k, v in pairs(Config.Locations["duty"]) do
         exports['qb-target']:RemoveZone("PoliceDuty_"..k)
     end
+
+    for k, v in pairs(Config.Locations["stash"]) do
+        exports['qb-target']:RemoveZone("PoliceStash_"..k)
+    end
+
+    for k, v in pairs(Config.Locations["trash"]) do
+        exports['qb-target']:RemoveZone("PoliceTrash_"..k)
+    end
+
+    for k, v in pairs(Config.Locations["fingerprint"]) do
+        exports['qb-target']:RemoveZone("PoliceFingerprint_"..k)
+    end
+
+    for k, v in pairs(Config.Locations["armory"]) do
+        exports['qb-target']:RemoveZone("PoliceArmory_"..k)
+    end
+
+    for k, v in pairs(Config.Locations["impound"]) do
+        exports['qb-target']:RemoveZone("PoliceArmory_"..k)
+    end
+
+    for k, v in pairs(Config.Locations["evidence"]) do
+        exports['qb-target']:RemoveZone("PoliceEvidence_"..k)
+    end
+
 end)
 
 AddEventHandler('QBCore:Client:OnPlayerLoaded', function()

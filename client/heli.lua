@@ -3,11 +3,12 @@ local fov_min = 10.0 -- max zoom level (smaller fov is more zoom)
 local zoomspeed = 2.0 -- camera zoom speed
 local speed_lr = 3.0 -- speed by which the camera pans left-right
 local speed_ud = 3.0 -- speed by which the camera pans up-down
-local toggle_helicam = 51 -- control id of the button by which to toggle the helicam mode. Default: INPUT_CONTEXT (E)
-local toggle_vision = 25 -- control id to toggle vision mode. Default: INPUT_AIM (Right mouse btn)
-local toggle_rappel = 154 -- control id to rappel out of the heli. Default: INPUT_DUCK (X)
-local toggle_spotlight = 74 -- control id to toggle the front spotlight Default: INPUT_VEH_HEADLIGHT (H)
-local toggle_lock_on = 22 -- control id to lock onto a vehicle with the camera. Default is INPUT_SPRINT (spacebar)
+local toggle_helicam = Config.toggle_helicam -- control id of the button by which to toggle the helicam mode. Default: INPUT_CONTEXT (E)
+local toggle_vision = Config.toggle_vision -- control id to toggle vision mode. Default: INPUT_AIM (Right mouse btn)
+local toggle_rappel = Config.toggle_rappel-- control id to rappel out of the heli. Default: INPUT_DUCK (X)
+local toggle_spotlight = Config.toggle_spotlight -- control id to toggle the front spotlight Default: INPUT_VEH_HEADLIGHT (H)
+local toggle_lock_on = Config.toggle_lock_on -- control id to lock onto a vehicle with the camera. Default is INPUT_SPRINT (spacebar)
+local inHelicopter = false
 
 -- Script starts here
 local spotlight_state = false
@@ -133,129 +134,175 @@ RegisterNetEvent('heli:spotlight', function(serverID, state)
 	SetVehicleSearchlight(heli, state, false)
 end)
 
+RegisterNetEvent('qb-police:client:spawnHelicopter', function(k)
+
+	print(k)
+    if IsPedInAnyVehicle(PlayerPedId(), false) then
+        QBCore.Functions.DeleteVehicle(GetVehiclePedIsIn(PlayerPedId()))
+    else
+        local coords = Config.Locations["helicopter"][k].exit
+        if not coords then coords = GetEntityCoords(PlayerPedId()) end
+        QBCore.Functions.TriggerCallback('QBCore:Server:SpawnVehicle', function(netId)
+            local veh = NetToVeh(netId)
+            SetVehicleLivery(veh , 0)
+            SetVehicleMod(veh, 0, 48)
+            SetVehicleNumberPlateText(veh, "ZULU"..tostring(math.random(1000, 9999)))
+            SetEntityHeading(veh, coords.w)
+            exports['LegacyFuel']:SetFuel(veh, 100.0)
+            closeMenuFull()
+            TaskWarpPedIntoVehicle(PlayerPedId(), veh, -1)
+            SetVehicleLivery(veh, Config.HeliSettings['MAVERICK'].livery)
+            TriggerEvent("vehiclekeys:client:SetOwner", QBCore.Functions.GetPlate(veh))
+            SetVehicleEngineOn(veh, true, true)
+        end, Config.PoliceHelicopter, coords, true)
+    end
+end)
+
+-- Helicopter Thread
+local function heli(boxName)
+    CreateThread(function()
+        while true do
+            Wait(0)
+            if inHelicopter and HasPoliceJob(PlayerJob.name) then
+                if PlayerJob.onduty then sleep = 5 end
+                if IsControlJustReleased(0, 38) then
+                    TriggerEvent("qb-police:client:spawnHelicopter",boxName)
+                    break
+                end
+            else
+                break
+            end
+        end
+    end)
+end
+
 -- Threads
-CreateThread(function()
-	while true do
-		Wait(0)
-		if LocalPlayer.state.isLoggedIn then
-			if HasPoliceJob(PlayerJob.name) and PlayerJob.onduty then
-				if IsPlayerInPolmav() then
-					local lPed = PlayerPedId()
-					local heli = GetVehiclePedIsIn(lPed)
+if Config.UseHeliSystem then
+	CreateThread(function()
+		while true do
+			Wait(0)
+			if LocalPlayer.state.isLoggedIn then
+				if HasPoliceJob(PlayerJob.name) and PlayerJob.onduty then
+					if IsPlayerInPolmav() then
+						local lPed = PlayerPedId()
+						local heli = GetVehiclePedIsIn(lPed)
 
-					if IsHeliHighEnough(heli) then
-						if IsControlJustPressed(0, toggle_helicam) then -- Toggle Helicam
-							PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
-							helicam = true
-							SendNUIMessage({
-								type = "heliopen",
-							})
-						end
-
-						if IsControlJustPressed(0, toggle_rappel) then -- Initiate rappel
-							if GetPedInVehicleSeat(heli, 1) == lPed or GetPedInVehicleSeat(heli, 2) == lPed then
-								PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
-								TaskRappelFromHeli(PlayerPedId(), 1)
-							end
-						end
-					end
-
-					if IsControlJustPressed(0, toggle_spotlight) and (GetPedInVehicleSeat(heli, -1) == lPed or GetPedInVehicleSeat(heli, 0) == lPed) then
-						spotlight_state = not spotlight_state
-						TriggerServerEvent("heli:spotlight", spotlight_state)
-						PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
-					end
-
-					if helicam then
-						SetTimecycleModifier("heliGunCam")
-						SetTimecycleModifierStrength(0.3)
-						local scaleform = RequestScaleformMovie("HELI_CAM")
-						while not HasScaleformMovieLoaded(scaleform) do
-							Wait(0)
-						end
-						local cam = CreateCam("DEFAULT_SCRIPTED_FLY_CAMERA", true)
-						AttachCamToEntity(cam, heli, 0.0,0.0,-1.5, true)
-						SetCamRot(cam, 0.0,0.0,GetEntityHeading(heli))
-						SetCamFov(cam, fov)
-						RenderScriptCams(true, false, 0, 1, 0)
-						PushScaleformMovieFunction(scaleform, "SET_CAM_LOGO")
-						PushScaleformMovieFunctionParameterInt(0) -- 0 for nothing, 1 for LSPD logo
-						PopScaleformMovieFunctionVoid()
-						locked_on_vehicle = nil
-						while helicam and not IsEntityDead(lPed) and (GetVehiclePedIsIn(lPed) == heli) and IsHeliHighEnough(heli) do
+						if IsHeliHighEnough(heli) then
 							if IsControlJustPressed(0, toggle_helicam) then -- Toggle Helicam
 								PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
-								helicam = false
-								isScanned = false
-								scanValue = 0
+								helicam = true
 								SendNUIMessage({
-									type = "disablescan",
-								})
-								SendNUIMessage({
-									type = "heliclose",
+									type = "heliopen",
 								})
 							end
-							if IsControlJustPressed(0, toggle_vision) then
-								PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
-								ChangeVision()
+
+							if IsControlJustPressed(0, toggle_rappel) then -- Initiate rappel
+								if GetPedInVehicleSeat(heli, 1) == lPed or GetPedInVehicleSeat(heli, 2) == lPed then
+									PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
+									TaskRappelFromHeli(PlayerPedId(), 1)
+								end
 							end
-							local zoomvalue = 0
-							if locked_on_vehicle then
-								if DoesEntityExist(locked_on_vehicle) then
-									PointCamAtEntity(cam, locked_on_vehicle, 0.0, 0.0, 0.0, true)
-									if IsControlJustPressed(0, toggle_lock_on) then
-										PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
-										locked_on_vehicle = nil
-										local rot = GetCamRot(cam, 2) -- All this because I can't seem to get the camera unlocked from the entity
-										fov = GetCamFov(cam)
-										local old_cam = cam
-										DestroyCam(old_cam, false)
-										cam = CreateCam("DEFAULT_SCRIPTED_FLY_CAMERA", true)
-										AttachCamToEntity(cam, heli, 0.0,0.0,-1.5, true)
-										SetCamRot(cam, rot, 2)
-										SetCamFov(cam, fov)
-										RenderScriptCams(true, false, 0, 1, 0)
-										isScanned = false
-										scanValue = 0
-										SendNUIMessage({
-											type = "disablescan",
-										})
-									end
-								else
+						end
+
+						if IsControlJustPressed(0, toggle_spotlight) and (GetPedInVehicleSeat(heli, -1) == lPed or GetPedInVehicleSeat(heli, 0) == lPed) then
+							spotlight_state = not spotlight_state
+							TriggerServerEvent("heli:spotlight", spotlight_state)
+							PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
+						end
+
+						if helicam then
+							SetTimecycleModifier("heliGunCam")
+							SetTimecycleModifierStrength(0.3)
+							local scaleform = RequestScaleformMovie("HELI_CAM")
+							while not HasScaleformMovieLoaded(scaleform) do
+								Wait(0)
+							end
+							local cam = CreateCam("DEFAULT_SCRIPTED_FLY_CAMERA", true)
+							AttachCamToEntity(cam, heli, 0.0,0.0,-1.5, true)
+							SetCamRot(cam, 0.0,0.0,GetEntityHeading(heli))
+							SetCamFov(cam, fov)
+							RenderScriptCams(true, false, 0, 1, 0)
+							PushScaleformMovieFunction(scaleform, "SET_CAM_LOGO")
+							PushScaleformMovieFunctionParameterInt(0) -- 0 for nothing, 1 for LSPD logo
+							PopScaleformMovieFunctionVoid()
+							locked_on_vehicle = nil
+							while helicam and not IsEntityDead(lPed) and (GetVehiclePedIsIn(lPed) == heli) and IsHeliHighEnough(heli) do
+								if IsControlJustPressed(0, toggle_helicam) then -- Toggle Helicam
+									PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
+									helicam = false
 									isScanned = false
+									scanValue = 0
 									SendNUIMessage({
 										type = "disablescan",
 									})
-									locked_on_vehicle = nil -- Cam will auto unlock when entity doesn't exist anyway
+									SendNUIMessage({
+										type = "heliclose",
+									})
 								end
-							else
-								zoomvalue = (1.0/(fov_max-fov_min))*(fov-fov_min)
-								CheckInputRotation(cam, zoomvalue)
-								vehicle_detected = GetVehicleInView(cam)
-								if DoesEntityExist(vehicle_detected) then
-									isScanning = true
+								if IsControlJustPressed(0, toggle_vision) then
+									PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
+									ChangeVision()
+								end
+								local zoomvalue = 0
+								if locked_on_vehicle then
+									if DoesEntityExist(locked_on_vehicle) then
+										PointCamAtEntity(cam, locked_on_vehicle, 0.0, 0.0, 0.0, true)
+										if IsControlJustPressed(0, toggle_lock_on) then
+											PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
+											locked_on_vehicle = nil
+											local rot = GetCamRot(cam, 2) -- All this because I can't seem to get the camera unlocked from the entity
+											fov = GetCamFov(cam)
+											local old_cam = cam
+											DestroyCam(old_cam, false)
+											cam = CreateCam("DEFAULT_SCRIPTED_FLY_CAMERA", true)
+											AttachCamToEntity(cam, heli, 0.0,0.0,-1.5, true)
+											SetCamRot(cam, rot, 2)
+											SetCamFov(cam, fov)
+											RenderScriptCams(true, false, 0, 1, 0)
+											isScanned = false
+											scanValue = 0
+											SendNUIMessage({
+												type = "disablescan",
+											})
+										end
+									else
+										isScanned = false
+										SendNUIMessage({
+											type = "disablescan",
+										})
+										locked_on_vehicle = nil -- Cam will auto unlock when entity doesn't exist anyway
+									end
 								else
-									isScanning = false
+									zoomvalue = (1.0/(fov_max-fov_min))*(fov-fov_min)
+									CheckInputRotation(cam, zoomvalue)
+									vehicle_detected = GetVehicleInView(cam)
+									if DoesEntityExist(vehicle_detected) then
+										isScanning = true
+									else
+										isScanning = false
+									end
 								end
+								HandleZoom(cam)
+								HideHUDThisFrame()
+								PushScaleformMovieFunction(scaleform, "SET_ALT_FOV_HEADING")
+								PushScaleformMovieFunctionParameterFloat(GetEntityCoords(heli).z)
+								PushScaleformMovieFunctionParameterFloat(zoomvalue)
+								PushScaleformMovieFunctionParameterFloat(GetCamRot(cam, 2).z)
+								PopScaleformMovieFunctionVoid()
+								DrawScaleformMovieFullscreen(scaleform, 255, 255, 255, 255)
+								Wait(0)
 							end
-							HandleZoom(cam)
-							HideHUDThisFrame()
-							PushScaleformMovieFunction(scaleform, "SET_ALT_FOV_HEADING")
-							PushScaleformMovieFunctionParameterFloat(GetEntityCoords(heli).z)
-							PushScaleformMovieFunctionParameterFloat(zoomvalue)
-							PushScaleformMovieFunctionParameterFloat(GetCamRot(cam, 2).z)
-							PopScaleformMovieFunctionVoid()
-							DrawScaleformMovieFullscreen(scaleform, 255, 255, 255, 255)
-							Wait(0)
+							helicam = false
+							ClearTimecycleModifier()
+							fov = (fov_max+fov_min)*0.5 -- reset to starting zoom level
+							RenderScriptCams(false, false, 0, 1, 0) -- Return to gameplay camera
+							SetScaleformMovieAsNoLongerNeeded(scaleform) -- Cleanly release the scaleform
+							DestroyCam(cam, false)
+							SetNightvision(false)
+							SetSeethrough(false)
 						end
-						helicam = false
-						ClearTimecycleModifier()
-						fov = (fov_max+fov_min)*0.5 -- reset to starting zoom level
-						RenderScriptCams(false, false, 0, 1, 0) -- Return to gameplay camera
-						SetScaleformMovieAsNoLongerNeeded(scaleform) -- Cleanly release the scaleform
-						DestroyCam(cam, false)
-						SetNightvision(false)
-						SetSeethrough(false)
+					else
+						Wait(2000)
 					end
 				else
 					Wait(2000)
@@ -263,42 +310,75 @@ CreateThread(function()
 			else
 				Wait(2000)
 			end
-		else
-			Wait(2000)
 		end
-	end
-end)
+	end)
 
-CreateThread(function()
-	while true do
-		Wait(1)
-		if helicam then
-			if isScanning and not isScanned then
-				if scanValue < 100 then
-					scanValue = scanValue + 1
-					SendNUIMessage({
-						type = "heliscan",
-						scanvalue = scanValue,
-					})
-					if scanValue == 100 then
-						PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
-						locked_on_vehicle = vehicle_detected
-						isScanning = false
-						isScanned = true
+	CreateThread(function()
+		while true do
+			Wait(1)
+			if helicam then
+				if isScanning and not isScanned then
+					if scanValue < 100 then
+						scanValue = scanValue + 1
+						SendNUIMessage({
+							type = "heliscan",
+							scanvalue = scanValue,
+						})
+						if scanValue == 100 then
+							PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", false)
+							locked_on_vehicle = vehicle_detected
+							isScanning = false
+							isScanned = true
+						end
+						Wait(10)
 					end
-					Wait(10)
+				elseif isScanned and not isScanning and locked_on_vehicle then
+					scanValue = 100
+					RenderVehicleInfo(locked_on_vehicle)
+					isScanning = false
+					Wait(100)
+				else
+					scanValue = 0
+					Wait(500)
 				end
-			elseif isScanned and not isScanning and locked_on_vehicle then
-				scanValue = 100
-				RenderVehicleInfo(locked_on_vehicle)
-				isScanning = false
-				Wait(100)
 			else
-				scanValue = 0
-				Wait(500)
+				Wait(1000)
 			end
-		else
-			Wait(1000)
 		end
-	end
-end)
+	end)
+
+	CreateThread(function()
+    	-- Helicopter
+    	local helicopterZones = {}
+    	for _, heli in pairs(Config.Locations["helicopter"]) do
+        	helicopterZones[#helicopterZones+1] = BoxZone:Create(
+            	heli.coords, 10, 10, {
+            	name = heli.name,
+				heading = heli.heading,
+            	debugPoly = Config.DebugZone,
+            	minZ = heli.coords.z - heli.zoneMinZ,
+            	maxZ = heli.coords.z + heli.zoneMinZ,
+        	})
+    	end
+
+    	local helicopterCombo = ComboZone:Create(helicopterZones, {name = "helicopterCombo", debugPoly = false})
+    	helicopterCombo:onPlayerInOut(function(isPointInside, point, zone)
+        	if isPointInside then
+            	inHelicopter = true
+            	if HasPoliceJob(PlayerJob.name) and PlayerJob.onduty then
+                	if IsPedInAnyVehicle(PlayerPedId(), false) then
+                    	exports['qb-core']:HideText()
+                    	exports['qb-core']:DrawText(Lang:t('info.store_heli'), 'left')
+                    	heli(zone.name)
+                	else
+                    	exports['qb-core']:DrawText(Lang:t('info.take_heli'), 'left')
+                    	heli(zone.name)
+                	end
+            	end
+        	else
+            	inHelicopter = false
+            	exports['qb-core']:HideText()
+        	end
+    	end)
+	end)
+end

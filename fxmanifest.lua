@@ -21,6 +21,7 @@ client_scripts {
 	'client/interactions.lua',
 	'client/job.lua',
 	'client/heli.lua',
+	'client/garage.lua',
 	'client/anpr.lua',
 	'client/evidence.lua',
 	'client/objects.lua',
